@@ -22,8 +22,6 @@ const allLocales = fs
 // Note: Well, you can also play with hyperparameters located at neural-settings.json
 // The list of locales to be executed. If undefined, all locales will be used.
 const allowedLocales = ['en-US'];
-// When None intent is returned, which intent should it be mapped to
-const noneIntent = 'general_quirky';
 // If true then annot_utt is used, otherwise the normal utt will be used
 const useAnnot = false;
 // **************************************************************************
@@ -35,9 +33,6 @@ function execFn({ net, data }) {
   for (let i = 0; i < data.length; i += 1) {
     const item = data[i];
     const classifications = net.run(item.utterance);
-    if (classifications[0].intent === 'None') {
-      classifications[0].intent = noneIntent;
-    }
     if (classifications[0].intent === item.intent) {
       good += 1;
     }
