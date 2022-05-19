@@ -35,6 +35,9 @@ function execFn({ net, data }) {
   for (let i = 0; i < data.length; i += 1) {
     const item = data[i];
     const classifications = net.run(item.utterance);
+    if (classifications[0].intent === 'None') {
+      classifications[0].intent = noneIntent;
+    }
     if (classifications[0].intent === item.intent) {
       good += 1;
     }

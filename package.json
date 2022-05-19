@@ -24,6 +24,6 @@
   },
   "dependencies": {
     "@agarimo/languages": "^1.0.0",
-    "@agarimo/neural": "^1.1.1"
+    "@agarimo/neural": "^1.1.2"
   }
 }
