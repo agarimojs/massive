@@ -4,7 +4,9 @@
   "description": "",
   "main": "src/index.js",
   "scripts": {
-    "test": "eslint --fix . && jest --silent --coverage --maxWorkers=4 ."
+    "test": "eslint --fix . && jest --silent --coverage --maxWorkers=4 .",
+    "start": "node .",
+    "bench": "node ./src/bench.js"
   },
   "author": {
     "email": "jseijas@gmail.com",
@@ -23,7 +25,10 @@
     "prettier": "^2.6.2"
   },
   "dependencies": {
-    "@agarimo/languages": "^1.0.0",
-    "@agarimo/neural": "^1.1.2"
+    "@agarimo/bench": "^1.0.0",
+    "@agarimo/languages": "^1.0.2",
+    "@agarimo/neural": "^1.1.2",
+    "dotenv": "^16.0.1",
+    "zlib": "^1.0.5"
   }
 }

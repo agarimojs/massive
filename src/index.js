@@ -1,50 +1,26 @@
-const { Bench } = require('@agarimo/bench');
+require('dotenv').config();
+const cluster = require('cluster');
 const fs = require('fs');
-const { NeuralBig: Neural } = require('@agarimo/neural');
+const path = require('path');
+const os = require('os');
+const zlib = require('zlib');
 const { initProcessors, getProcessor } = require('@agarimo/languages');
+const { NeuralBig: Neural } = require('@agarimo/neural');
 const {
   loadMassive,
   applyInCorpus,
-  replaceAcronyms,
-  augmentNgrams,
   cleanCorpus,
+  augmentNgrams,
 } = require('./helpers');
 const neuralSettings = require('./neural-settings.json');
 
+const numCPUs = os.cpus().length;
 const DATASET_PATH = './data';
-
-const allLocales = fs
-  .readdirSync(DATASET_PATH)
-  .filter((file) => file.endsWith('.jsonl'))
-  .map((file) => file.replace('.jsonl', ''));
-
-// *********** These are the settings that you can change ********************
-// Note: Well, you can also play with hyperparameters located at neural-settings.json
-// The list of locales to be executed. If undefined, all locales will be used.
-const allowedLocales = ['en-US'];
-// If true then annot_utt is used, otherwise the normal utt will be used
+const MODELS_PATH = './models';
+const allowedLocales = undefined;
 const useAnnot = false;
-// **************************************************************************
 
-const locales = allowedLocales || allLocales;
-
-function execFn({ net, data }) {
-  let good = 0;
-  for (let i = 0; i < data.length; i += 1) {
-    const item = data[i];
-    const classifications = net.run(item.utterance);
-    if (classifications[0].intent === item.intent) {
-      good += 1;
-    }
-  }
-  return `Good ${good} of ${data.length} Accuracy: ${
-    (good / data.length) * 100
-  }`;
-}
-
-(async () => {
-  await initProcessors();
-  const locale = locales[0];
+async function trainAndValidate(locale) {
   let corpus = loadMassive(DATASET_PATH, locale);
   corpus.data.forEach((srcItem) => {
     const item = srcItem;
@@ -55,12 +31,6 @@ function execFn({ net, data }) {
       item.tests = item.annotTests;
     }
   });
-  applyInCorpus(corpus, replaceAcronyms, [
-    'utterances',
-    'tests',
-    'annotUtterances',
-    'annotTests',
-  ]);
   const processor = getProcessor(locale);
   applyInCorpus(corpus, (str) => processor(str).join(' '), [
     'utterances',
@@ -69,18 +39,72 @@ function execFn({ net, data }) {
   corpus = cleanCorpus(corpus);
   applyInCorpus(corpus, (str) => augmentNgrams(str), ['utterances', 'tests']);
   const neural = new Neural(neuralSettings);
-  console.time('train');
+  console.time(`train ${locale}`);
   neural.train(corpus);
-  console.timeEnd('train');
-  neural.useCache = false;
-  const data = [];
-  corpus.data.forEach((item) => {
-    item.tests.forEach((test) => {
-      data.push({ utterance: test, intent: item.intent });
+  console.timeEnd(`train ${locale}`);
+  const measure = neural.measure();
+  const model = zlib.deflateSync(JSON.stringify(neural.toJSON()));
+  fs.writeFileSync(
+    path.join(MODELS_PATH, `${locale}_${useAnnot ? 'annot_' : ''}model.zjson`),
+    model
+  );
+  const accuracy = (measure.good * 100) / measure.total;
+  process.send({ type: 'result', locale, accuracy });
+}
+
+if (cluster.isMaster) {
+  const locales =
+    allowedLocales ||
+    fs
+      .readdirSync(DATASET_PATH)
+      .filter((file) => file.endsWith('.jsonl'))
+      .map((file) => file.replace('.jsonl', ''));
+  const pending = [...locales];
+  const workers = {};
+  console.time('time');
+  const results = [];
+  for (let i = 0; i < numCPUs; i += 1) {
+    const worker = cluster.fork();
+    workers[worker.process.pid] = worker;
+    console.log(`Worker ${worker.process.pid} started`);
+    worker.on('message', (msg) => {
+      if (msg.type === 'gettask') {
+        if (pending.length === 0) {
+          worker.send({ type: 'exit' });
+        } else {
+          const locale = pending.shift();
+          worker.send({ type: 'trainandvalidate', locale });
+        }
+      } else if (msg.type === 'result') {
+        results.push({ locale: msg.locale, accuracy: msg.accuracy.toFixed(1) });
+      }
+    });
+  }
+  cluster.on('exit', (worker) => {
+    delete workers[worker.process.pid];
+    console.log(`Worker ${worker.process.pid} died`);
+    if (Object.keys(workers).length === 0) {
+      results.sort((a, b) => (a.locale < b.locale ? -1 : 1));
+      console.log(results);
+      console.log(
+        results.reduce(
+          (prev, curr) => prev + parseFloat(curr.accuracy, 10),
+          0
+        ) / locales.length
+      );
+      console.timeEnd('time');
+    }
+  });
+} else {
+  initProcessors().then(() => {
+    process.send({ type: 'gettask' });
+    process.on('message', async (msg) => {
+      if (msg.type === 'exit') {
+        process.exit(0);
+      } else if (msg.type === 'trainandvalidate') {
+        await trainAndValidate(msg.locale);
+        process.send({ type: 'gettask' });
+      }
     });
   });
-  const bench = new Bench({ transactionsPerRun: data.length });
-  bench.add('exec', execFn, () => ({ net: neural, data }));
-  const result = await bench.measure(bench.algorithms[0]);
-  console.log(result);
-})();
+}

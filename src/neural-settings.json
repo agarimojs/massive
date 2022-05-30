@@ -2,10 +2,8 @@
   "iterations": 150,
   "errorThresh": 0.0000005,
   "deltaErrorThresh": 0.00000000001,
-  "learningRate": 0.02,
+  "learningRate": 0.018,
   "momentum": 0.05,
   "alpha": 0.07,
-  "log": true,
-  "minWeight": 0.1,
-  "errorThreshPerceptronOverData": 0.00000000005
+  "log": false
 }

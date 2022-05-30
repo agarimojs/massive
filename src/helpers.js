@@ -1,32 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-function replaceAcronyms(str) {
-  const tokens = str.split(' ');
-  let tokenIndex = 0;
-  const result = [];
-  while (tokenIndex < tokens.length) {
-    if (
-      tokens[tokenIndex] &&
-      tokens[tokenIndex].length === 2 &&
-      tokens[tokenIndex].endsWith('.')
-    ) {
-      let acronym = '';
-      while (
-        tokens[tokenIndex] &&
-        tokens[tokenIndex].length === 2 &&
-        tokens[tokenIndex].endsWith('.')
-      ) {
-        acronym += tokens[tokenIndex][0].toUpperCase();
-        tokenIndex += 1;
-      }
-      result.push(acronym);
-    } else {
-      result.push(tokens[tokenIndex]);
-      tokenIndex += 1;
-    }
-  }
-  return result.join(' ');
+function calculateHash(str) {
+  return str.split(' ').sort().join('_');
 }
 
 function loadMassive(DATASET_PATH, locale) {
@@ -92,25 +68,6 @@ function applyInCorpus(corpus, fn, srcFieldNames) {
   return corpus;
 }
 
-function augmentNgrams(input) {
-  if (typeof input === 'string') {
-    return augmentNgrams(input.split(' ')).join(' ');
-  }
-  const tokens = input;
-  const ngrams = [];
-  for (let i = 1; i < tokens.length; i += 1) {
-    ngrams.push(`${tokens[i - 1]}_${tokens[i]}`);
-  }
-  // for (let i = 2; i < tokens.length; i += 1) {
-  //   ngrams.push(`${tokens[i - 2]}_${tokens[i]}`);
-  // }
-  return [...tokens, ...ngrams];
-}
-
-function calculateHash(str) {
-  return str.split(' ').sort().join('_');
-}
-
 function cleanCorpus(corpus) {
   const result = {
     name: corpus.name,
@@ -148,10 +105,21 @@ function cleanCorpus(corpus) {
   return result;
 }
 
+function augmentNgrams(input) {
+  if (typeof input === 'string') {
+    return augmentNgrams(input.split(' ')).join(' ');
+  }
+  const tokens = input;
+  const ngrams = [];
+  for (let i = 1; i < tokens.length; i += 1) {
+    ngrams.push(`${tokens[i - 1]}_${tokens[i]}`);
+  }
+  return [...tokens, ...ngrams];
+}
+
 module.exports = {
   loadMassive,
-  replaceAcronyms,
   applyInCorpus,
-  augmentNgrams,
   cleanCorpus,
+  augmentNgrams,
 };
